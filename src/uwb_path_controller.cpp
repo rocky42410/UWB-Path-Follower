@@ -11,9 +11,9 @@
 #include <fstream>
 #include <iomanip>
 #include <unitree/robot/channel/channel_publisher.hpp>
-#include <unitree/robot/channel/channel_subscriber.hpp>
-#include <unitree/idl/go2/SportModeState_.hpp>
-#include <unitree/robot/client/sport_client.hpp>
+#include <./unitree/robot/channel/channel_subscriber.hpp>
+#include <./unitree/idl/go2/SportModeState_.hpp>
+#include <./unitree/robot/client/sport_client.hpp>
 
 using namespace unitree::robot;
 using namespace unitree::common;

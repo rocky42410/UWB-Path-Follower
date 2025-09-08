@@ -1,0 +1,1 @@
+/usr/bin/c++  -Wall -Wextra -O2 -O3 -DNDEBUG CMakeFiles/test_estimator.dir/test/test_estimator.cpp.o -o test_estimator   -L/home/rocky42410/unitree_sdk2/lib  -Wl,-rpath,/home/rocky42410/unitree_sdk2/lib -lunitree_sdk2 -lddsc -lm 

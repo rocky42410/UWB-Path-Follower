@@ -14,7 +14,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
 find_package(Threads REQUIRED)
 
-set(UNITREE_SDK_PATH "/path/to/unitree_sdk2" CACHE PATH "Path to Unitree SDK")
+set(UNITREE_SDK_PATH "~/unitree_sdk-main" CACHE PATH "Path to Unitree SDK")
 if(NOT EXISTS ${UNITREE_SDK_PATH})
     message(WARNING "UNITREE_SDK_PATH not found. Set with -DUNITREE_SDK_PATH=/your/path")
 endif()
