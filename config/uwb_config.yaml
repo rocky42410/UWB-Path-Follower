@@ -1,0 +1,104 @@
+# UWB Path Follower Configuration
+# All units SI (meters, radians, seconds)
+
+# Base station pose in world frame
+base_station:
+  position:
+    x: 0.0      # meters
+    y: 0.0      # meters
+    z: 0.0      # meters (usually fixed height)
+  yaw: 0.0      # radians (orientation of base station)
+
+# UWB tag mounting on robot body
+tag_mount:
+  # Vector from body origin to tag (in body frame)
+  lever_arm:
+    x: 0.0      # meters (forward)
+    y: 0.15     # meters (left)
+    z: 0.0      # meters (up)
+  # Yaw offset from tag frame to body frame
+  yaw_offset: 0.0  # radians
+
+# State estimator fusion gains
+fusion:
+  # Complementary filter gains (0-1)
+  k_position: 0.1    # Position correction gain
+  k_yaw: 0.15        # Yaw correction gain
+  
+  # Innovation gates (reject if exceeded)
+  max_position_innovation: 0.5   # meters
+  max_yaw_innovation: 0.3        # radians
+  
+  # Rate limits (per second)
+  max_position_rate: 0.2          # m/s
+  max_yaw_rate: 0.5              # rad/s
+
+# Path tracking controller
+path_control:
+  # Nominal speeds
+  forward_speed: 0.3             # m/s
+  
+  # PD gains for line following
+  crosstrack_kp: 1.0             # Lateral correction gain
+  heading_kp: 0.8                # Heading correction gain
+  
+  # Low-pass filter
+  command_filter_tau: 0.25       # seconds
+  
+  # Command saturation
+  max_lateral_speed: 0.1         # m/s
+  max_yaw_rate: 0.5             # rad/s
+
+# Path waypoints
+path:
+  length: 5.0                    # meters (out-and-back distance)
+  waypoint_tolerance: 0.2        # meters (reached threshold)
+  
+  # Phase durations
+  sit_duration: 2.0              # seconds
+  turn_duration: 3.0             # seconds
+
+# UWB quality thresholds
+uwb:
+  min_quality: 0.7               # 0-1 quality score
+  max_latency: 0.1               # seconds
+  
+  # Spherical measurement noise gates
+  max_range_jump: 1.0            # meters
+  max_azimuth_jump: 0.5          # radians
+  max_elevation_jump: 0.3        # radians
+  max_yaw_jump: 0.5             # radians
+
+# ZUPT (Zero Velocity Update) for sits
+zupt:
+  min_foot_force: 10.0           # Newtons (total)
+  max_velocity: 0.05             # m/s
+  max_gyro: 0.05                # rad/s
+  
+# Data collection modes
+modes:
+  default: "SMOOTH_LOOP"         # Options: OPEN_LOOP, SMOOTH_LOOP, SHADOW
+  
+# Logging
+logging:
+  output_dir: "./logs"
+  filename_prefix: "uwb_path"
+  log_rate: 50                  # Hz
+  
+  # Fields to log (for RoCA training)
+  include_raw_uwb: true
+  include_innovations: true
+  include_commands: true
+  include_imu: true
+  include_foot_forces: true
+
+# System parameters
+system:
+  control_rate: 50               # Hz
+  dds_topic: "rt/sportmodestate"
+  
+# Safety limits
+safety:
+  max_position_error: 2.0        # meters (emergency stop)
+  max_velocity: 0.5              # m/s
+  obstacle_distance: 0.3         # meters (from range_obstacle)
