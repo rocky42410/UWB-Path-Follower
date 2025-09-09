@@ -1,5 +1,5 @@
 // src/uwb_path_controller.cpp
-// Main controller with proper modular includes
+// Main controller with CORRECT includes and namespaces
 
 #include <cmath>
 #include <thread>
@@ -9,14 +9,16 @@
 #include <fstream>
 #include <iomanip>
 #include <signal.h>
+#include <csignal>
 #include <memory>
 
-// Unitree SDK includes
+// Unitree SDK includes - WITH CORRECT PATHS
 #include <unitree/robot/channel/channel_factory.hpp>
-//#include <unitree/robot/channel/channel_publisher.hpp>
+#include <unitree/robot/channel/channel_publisher.hpp>
 #include <unitree/robot/channel/channel_subscriber.hpp>
 #include <unitree/idl/go2/SportModeState_.hpp>
-#include <unitree/robot/client/sport_client.hpp>
+#include <unitree/idl/go2/UwbState_.hpp>
+#include <unitree/robot/go2/sport/sport_client.hpp>  // ✅ CORRECT PATH FOR GO2
 
 // Our modular includes - all components
 #include "uwb_path_follower/all_components.hpp"
@@ -29,7 +31,7 @@ using namespace uwb_path;
 class UWBPathController {
 private:
     Config cfg;
-    SportClient sport_client;
+    unitree::robot::go2::SportClient sport_client;  // ✅ CORRECT NAMESPACE go2::SportClient
     ChannelSubscriberPtr<unitree_go::msg::dds_::SportModeState_> sport_subscriber;
     
     // Components
@@ -74,7 +76,8 @@ public:
         ChannelFactory::Instance()->Init(0, network_interface.c_str());
         std::cout << "[Init] DDS initialized on interface: " << network_interface << std::endl;
         
-        // Initialize sport client
+        // Initialize sport client with CORRECT pattern
+        sport_client.SetTimeout(10.0f);  // ✅ Set timeout BEFORE Init()
         sport_client.Init();
         std::cout << "[Init] Sport client initialized" << std::endl;
         
@@ -240,7 +243,7 @@ public:
                 clamp(wz_filtered, -0.5, 0.5)
             };
             
-            // Send command
+            // Send command using CORRECT Move() method
             sport_client.Move(cmd.vx, cmd.vy, cmd.wz);
             last_cmd = cmd;
             
@@ -277,7 +280,7 @@ public:
     
     void stop() {
         running = false;
-        sport_client.Move(0, 0, 0);
+        sport_client.Move(0, 0, 0);  // Stop robot
     }
 };
 

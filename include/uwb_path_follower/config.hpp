@@ -4,7 +4,8 @@
 #include <string>
 #include <iostream>
 #include <fstream>
-#include <yaml-cpp/yaml.h>  // Optional: for YAML loading
+// YAML support is optional - uncomment if yaml-cpp is installed
+// #include <yaml-cpp/yaml.h>
 
 namespace uwb_path {
 

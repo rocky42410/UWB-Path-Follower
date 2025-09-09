@@ -1,8 +1,0 @@
-/mnt/c/Users/rocks/Documents/Summer 2025/Work/Dog Research/uwb_path_follower/build/CMakeFiles/uwb_path_controller.dir
-/mnt/c/Users/rocks/Documents/Summer 2025/Work/Dog Research/uwb_path_follower/build/CMakeFiles/test_estimator.dir
-/mnt/c/Users/rocks/Documents/Summer 2025/Work/Dog Research/uwb_path_follower/build/CMakeFiles/edit_cache.dir
-/mnt/c/Users/rocks/Documents/Summer 2025/Work/Dog Research/uwb_path_follower/build/CMakeFiles/rebuild_cache.dir
-/mnt/c/Users/rocks/Documents/Summer 2025/Work/Dog Research/uwb_path_follower/build/CMakeFiles/list_install_components.dir
-/mnt/c/Users/rocks/Documents/Summer 2025/Work/Dog Research/uwb_path_follower/build/CMakeFiles/install.dir
-/mnt/c/Users/rocks/Documents/Summer 2025/Work/Dog Research/uwb_path_follower/build/CMakeFiles/install/local.dir
-/mnt/c/Users/rocks/Documents/Summer 2025/Work/Dog Research/uwb_path_follower/build/CMakeFiles/install/strip.dir
