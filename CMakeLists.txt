@@ -4,6 +4,7 @@ project(uwb_path_follower)
 # C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -19,25 +20,21 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 find_package(Threads REQUIRED)
 
 # ============= UNITREE SDK PATH DETECTION =============
-# Try multiple methods to find the SDK
-
 # Method 1: Environment variable
 if(DEFINED ENV{UNITREE_SDK_PATH})
     set(UNITREE_SDK_PATH $ENV{UNITREE_SDK_PATH})
     message(STATUS "Found UNITREE_SDK_PATH from environment: ${UNITREE_SDK_PATH}")
 endif()
 
-# Method 2: Common installation paths
+# Method 2: Try common paths
 if(NOT DEFINED UNITREE_SDK_PATH OR NOT EXISTS ${UNITREE_SDK_PATH})
     set(SDK_SEARCH_PATHS
+        /root/unitree_sdk2-main          # Your actual path from the error
+        /root/unitree_sdk2
         /opt/unitree_sdk2
         /usr/local/unitree_sdk2
-        /opt/unitree/unitree_sdk2
+        ~/unitree_sdk2-main
         ~/unitree_sdk2
-        ~/software/unitree_sdk2
-        ~/ws/unitree_sdk2
-        ${CMAKE_CURRENT_SOURCE_DIR}/../unitree_sdk2
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../unitree_sdk2
     )
     
     foreach(PATH ${SDK_SEARCH_PATHS})
@@ -49,129 +46,219 @@ if(NOT DEFINED UNITREE_SDK_PATH OR NOT EXISTS ${UNITREE_SDK_PATH})
     endforeach()
 endif()
 
-# Method 3: User specified via cmake
-if(NOT DEFINED UNITREE_SDK_PATH OR NOT EXISTS ${UNITREE_SDK_PATH})
-    set(UNITREE_SDK_PATH "/path/to/unitree_sdk2" CACHE PATH "Path to Unitree SDK")
+# Default fallback
+if(NOT DEFINED UNITREE_SDK_PATH)
+    set(UNITREE_SDK_PATH "/root/unitree_sdk2-main" CACHE PATH "Path to Unitree SDK")
 endif()
 
-# Verify the SDK path is valid
+# Verify SDK exists
 if(NOT EXISTS ${UNITREE_SDK_PATH}/include/unitree)
-    message(FATAL_ERROR 
-        "Unitree SDK not found!\n"
-        "The directory ${UNITREE_SDK_PATH}/include/unitree does not exist.\n"
-        "Please set UNITREE_SDK_PATH using one of these methods:\n"
-        "  1. Environment: export UNITREE_SDK_PATH=/path/to/unitree_sdk2\n"
-        "  2. CMake: cmake .. -DUNITREE_SDK_PATH=/path/to/unitree_sdk2\n"
-        "  3. Install SDK to standard location: /opt/unitree_sdk2\n"
-        "\n"
-        "The SDK directory should contain:\n"
-        "  include/unitree/  (with robot/, common/, idl/ subdirs)\n"
-        "  lib/             (with libunitree_sdk2.so)\n"
-    )
-endif()
-
-# Verify critical headers exist
-set(REQUIRED_HEADERS
-    ${UNITREE_SDK_PATH}/include/unitree/robot/client/sport_client.hpp
-    ${UNITREE_SDK_PATH}/include/unitree/robot/channel/channel_publisher.hpp
-    ${UNITREE_SDK_PATH}/include/unitree/idl/go2/SportModeState_.hpp
-    ${UNITREE_SDK_PATH}/include/unitree/idl/go2/UwbState_.hpp
-)
-
-foreach(HEADER ${REQUIRED_HEADERS})
-    if(NOT EXISTS ${HEADER})
-        message(WARNING "Required header not found: ${HEADER}")
-    endif()
-endforeach()
-
-# Verify library exists
-if(NOT EXISTS ${UNITREE_SDK_PATH}/lib/libunitree_sdk2.so)
-    message(WARNING "Unitree SDK library not found: ${UNITREE_SDK_PATH}/lib/libunitree_sdk2.so")
+    message(FATAL_ERROR "Unitree SDK not found at ${UNITREE_SDK_PATH}")
 endif()
 
 message(STATUS "Using Unitree SDK from: ${UNITREE_SDK_PATH}")
-message(STATUS "  Include: ${UNITREE_SDK_PATH}/include")
-message(STATUS "  Library: ${UNITREE_SDK_PATH}/lib")
 
-# Include directories
+# ============= CYCLONE DDS DETECTION =============
+# The Unitree SDK requires CycloneDDS headers and libraries
+
+# Method 1: Check if it's in the Unitree SDK's thirdparty
+set(DDS_INCLUDE_DIRS "")
+set(DDS_LIBRARIES "")
+
+# Check for thirdparty directory in Unitree SDK
+if(EXISTS ${UNITREE_SDK_PATH}/thirdparty)
+    message(STATUS "Found thirdparty directory in Unitree SDK")
+    
+    # Look for CycloneDDS in thirdparty
+    if(EXISTS ${UNITREE_SDK_PATH}/thirdparty/include/ddscxx)
+        list(APPEND DDS_INCLUDE_DIRS ${UNITREE_SDK_PATH}/thirdparty/include)
+        list(APPEND DDS_INCLUDE_DIRS ${UNITREE_SDK_PATH}/thirdparty/include/ddscxx)
+        message(STATUS "Found DDS headers in thirdparty")
+    endif()
+    
+    # Look for built libraries
+    if(EXISTS ${UNITREE_SDK_PATH}/build/lib)
+        link_directories(${UNITREE_SDK_PATH}/build/lib)
+        set(DDS_LIB_PATH ${UNITREE_SDK_PATH}/build/lib)
+    elseif(EXISTS ${UNITREE_SDK_PATH}/thirdparty/lib)
+        link_directories(${UNITREE_SDK_PATH}/thirdparty/lib)
+        set(DDS_LIB_PATH ${UNITREE_SDK_PATH}/thirdparty/lib)
+    endif()
+endif()
+
+# Method 2: Check system-wide installation
+if(NOT DDS_INCLUDE_DIRS)
+    # Common CycloneDDS installation paths
+    set(DDS_SEARCH_PATHS
+        /usr/local/include
+        /usr/include
+        /opt/cyclonedds/include
+        ${CMAKE_PREFIX_PATH}/include
+    )
+    
+    foreach(PATH ${DDS_SEARCH_PATHS})
+        if(EXISTS ${PATH}/dds/dds.hpp OR EXISTS ${PATH}/ddscxx/dds/dds.hpp)
+            list(APPEND DDS_INCLUDE_DIRS ${PATH})
+            if(EXISTS ${PATH}/ddscxx)
+                list(APPEND DDS_INCLUDE_DIRS ${PATH}/ddscxx)
+            endif()
+            message(STATUS "Found DDS headers at: ${PATH}")
+            break()
+        endif()
+    endforeach()
+endif()
+
+# Method 3: Try pkg-config
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+    pkg_check_modules(CYCLONEDDS cyclonedds-cxx)
+    if(CYCLONEDDS_FOUND)
+        list(APPEND DDS_INCLUDE_DIRS ${CYCLONEDDS_INCLUDE_DIRS})
+        message(STATUS "Found CycloneDDS via pkg-config")
+    endif()
+endif()
+
+if(NOT DDS_INCLUDE_DIRS)
+    message(WARNING "CycloneDDS headers not found. You may need to:")
+    message(WARNING "  1. Build Unitree SDK's thirdparty directory:")
+    message(WARNING "     cd ${UNITREE_SDK_PATH} && mkdir build && cd build")
+    message(WARNING "     cmake .. && make")
+    message(WARNING "  2. Or install CycloneDDS separately:")
+    message(WARNING "     git clone https://github.com/eclipse-cyclonedds/cyclonedds-cxx.git")
+    message(WARNING "     cd cyclonedds-cxx && mkdir build && cd build")
+    message(WARNING "     cmake .. && make && sudo make install")
+else()
+    message(STATUS "DDS Include dirs: ${DDS_INCLUDE_DIRS}")
+endif()
+
+# ============= INCLUDE DIRECTORIES =============
 include_directories(
     ${UNITREE_SDK_PATH}/include
+    ${DDS_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Link directories
+# ============= LINK DIRECTORIES =============
 link_directories(
     ${UNITREE_SDK_PATH}/lib
+    ${UNITREE_SDK_PATH}/lib/x86_64     # For x86_64 architecture
+    ${UNITREE_SDK_PATH}/lib/aarch64    # For ARM64 architecture
+    ${DDS_LIB_PATH}
+    /usr/local/lib                     # Common library path
 )
 
-# Find CycloneDDS (optional, may be bundled with Unitree SDK)
-find_library(DDSC_LIB ddsc
-    HINTS ${UNITREE_SDK_PATH}/lib
-    /usr/local/lib
-    /usr/lib
+# ============= FIND LIBRARIES =============
+# Find unitree_sdk2 library
+find_library(UNITREE_SDK2_LIB 
+    NAMES unitree_sdk2
+    PATHS 
+        ${UNITREE_SDK_PATH}/lib/${CMAKE_SYSTEM_PROCESSOR}
+        ${UNITREE_SDK_PATH}/lib/x86_64
+        ${UNITREE_SDK_PATH}/lib/aarch64
+        ${UNITREE_SDK_PATH}/lib
+    NO_DEFAULT_PATH
+)
+
+if(NOT UNITREE_SDK2_LIB)
+    message(WARNING "unitree_sdk2 library not found, will try to link anyway")
+    set(UNITREE_SDK2_LIB "unitree_sdk2")
+else()
+    message(STATUS "Found unitree_sdk2: ${UNITREE_SDK2_LIB}")
+endif()
+
+# Find DDS libraries
+find_library(DDSC_LIB 
+    NAMES ddsc
+    PATHS 
+        ${DDS_LIB_PATH}
+        ${UNITREE_SDK_PATH}/lib
+        /usr/local/lib
+        /usr/lib
+)
+
+find_library(DDSCXX_LIB 
+    NAMES ddscxx cycloneddsidlcxx
+    PATHS 
+        ${DDS_LIB_PATH}
+        ${UNITREE_SDK_PATH}/lib
+        /usr/local/lib
+        /usr/lib
 )
 
 if(NOT DDSC_LIB)
-    message(WARNING "CycloneDDS library (ddsc) not found. Build may fail.")
+    message(WARNING "ddsc library not found, will try to link anyway")
+    set(DDSC_LIB "ddsc")
 else()
-    message(STATUS "Found CycloneDDS: ${DDSC_LIB}")
+    message(STATUS "Found ddsc: ${DDSC_LIB}")
 endif()
 
-# Main executable
+if(NOT DDSCXX_LIB)
+    message(WARNING "ddscxx library not found, will try to link anyway")
+    set(DDSCXX_LIB "ddscxx")
+else()
+    message(STATUS "Found ddscxx: ${DDSCXX_LIB}")
+endif()
+
+# ============= MAIN EXECUTABLE =============
 add_executable(uwb_path_controller
     src/uwb_path_controller.cpp
 )
 
-# Link libraries
+# Link libraries (order matters!)
 target_link_libraries(uwb_path_controller
-    unitree_sdk2
-    ddsc
+    ${UNITREE_SDK2_LIB}
+    ${DDSC_LIB}
+    ${DDSCXX_LIB}
     Threads::Threads
+    rt
     m
+    dl
 )
 
-# Set RPATH for runtime library loading
+# Set RPATH for runtime
 set_target_properties(uwb_path_controller PROPERTIES
-    INSTALL_RPATH "${UNITREE_SDK_PATH}/lib"
-    BUILD_RPATH "${UNITREE_SDK_PATH}/lib"
+    INSTALL_RPATH "${UNITREE_SDK_PATH}/lib:${DDS_LIB_PATH}:/usr/local/lib"
+    BUILD_RPATH "${UNITREE_SDK_PATH}/lib:${DDS_LIB_PATH}:/usr/local/lib"
 )
 
-# Test executable (if exists)
+# ============= TEST EXECUTABLE =============
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test/test_estimator.cpp")
     add_executable(test_estimator
         test/test_estimator.cpp
     )
     
     target_link_libraries(test_estimator
-        unitree_sdk2
-        ddsc
+        ${UNITREE_SDK2_LIB}
+        ${DDSC_LIB}
+        ${DDSCXX_LIB}
         Threads::Threads
+        rt
         m
-    )
-    
-    set_target_properties(test_estimator PROPERTIES
-        INSTALL_RPATH "${UNITREE_SDK_PATH}/lib"
-        BUILD_RPATH "${UNITREE_SDK_PATH}/lib"
     )
 endif()
 
-# Installation
+# ============= INSTALLATION =============
 install(TARGETS uwb_path_controller
     DESTINATION bin
 )
 
-install(FILES config/uwb_config.yaml
-    DESTINATION etc/uwb_path_follower
-)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/config/uwb_config.yaml")
+    install(FILES config/uwb_config.yaml
+        DESTINATION etc/uwb_path_follower
+    )
+endif()
 
-# Print summary
+# ============= STATUS OUTPUT =============
 message(STATUS "===========================================")
 message(STATUS "UWB Path Follower Configuration Summary:")
 message(STATUS "  CMake Version: ${CMAKE_VERSION}")
 message(STATUS "  Compiler: ${CMAKE_CXX_COMPILER}")
 message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "  System: ${CMAKE_SYSTEM_NAME} ${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "  Unitree SDK: ${UNITREE_SDK_PATH}")
-message(STATUS "  CycloneDDS: ${DDSC_LIB}")
-message(STATUS "===========================================")
-message(STATUS "To build: make -j$(nproc)")
+message(STATUS "  DDS Headers: ${DDS_INCLUDE_DIRS}")
+message(STATUS "  Libraries:")
+message(STATUS "    unitree_sdk2: ${UNITREE_SDK2_LIB}")
+message(STATUS "    ddsc: ${DDSC_LIB}")
+message(STATUS "    ddscxx: ${DDSCXX_LIB}")
 message(STATUS "===========================================")
