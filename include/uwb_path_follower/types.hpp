@@ -1,63 +1,49 @@
-// include/uwb_path_follower/types.hpp
+// File: include/uwb_path_follower/types.hpp
 #pragma once
-
 #include <array>
+#include <algorithm>
 #include <cmath>
 
 namespace uwb_path {
 
-// 2D pose representation
+// Single-source portable constants
+inline constexpr double PI = 3.141592653589793238462643383279502884;
+inline constexpr double HALF_PI = PI * 0.5;
+
 struct Pose2D {
-    double x = 0, y = 0, yaw = 0;
-    
-    Pose2D operator+(const Pose2D& other) const {
-        return {x + other.x, y + other.y, yaw + other.yaw};
-    }
-    
-    Pose2D operator-(const Pose2D& other) const {
-        return {x - other.x, y - other.y, yaw - other.yaw};
-    }
-    
-    Pose2D operator*(double scalar) const {
-        return {x * scalar, y * scalar, yaw * scalar};
-    }
+  double x = 0, y = 0, yaw = 0;
+  Pose2D operator+(const Pose2D& o) const { return {x+o.x, y+o.y, yaw+o.yaw}; }
+  Pose2D operator-(const Pose2D& o) const { return {x-o.x, y-o.y, yaw-o.yaw}; }
+  Pose2D operator*(double s) const { return {x*s, y*s, yaw*s}; }
 };
 
-// 2D velocity command
 struct Twist2D {
-    double vx = 0, vy = 0, wz = 0;
+  double vx = 0, vy = 0, wz = 0;
 };
 
-// UWB spherical measurement
 struct UWBMeasurement {
-    double r = 0;        // range (m)
-    double beta = 0;     // azimuth (rad)
-    double alpha = 0;    // elevation (rad)
-    double gamma = 0;    // tag yaw (rad)
-    double timestamp = 0;
-    double quality = 0;
+  double r = 0;        // range (m)
+  double beta = 0;     // azimuth (rad)
+  double alpha = 0;    // elevation (rad)
+  double gamma = 0;    // tag yaw (rad)
+  double timestamp = 0; // epoch seconds
+  double quality = 0;   // 0..1
 };
 
-// IMU data
 struct IMUData {
-    double roll = 0, pitch = 0;  // rad
-    double gyro_z = 0;            // rad/s
-    std::array<double, 4> quaternion = {1,0,0,0}; // w,x,y,z
+  double roll = 0, pitch = 0;   // rad
+  double gyro_z = 0;            // rad/s
+  std::array<double,4> quaternion{1,0,0,0}; // w,x,y,z
 };
 
-// Utility functions
-inline double wrapAngle(double angle) {
-    while (angle > M_PI) angle -= 2*M_PI;
-    while (angle < -M_PI) angle += 2*M_PI;
-    return angle;
+inline double wrapAngle(double a) {
+  while (a > PI) a -= 2*PI;
+  while (a < -PI) a += 2*PI;
+  return a;
 }
-
-inline double angleDiff(double a, double b) {
-    return wrapAngle(a - b);
-}
-
-inline double clamp(double val, double min, double max) {
-    return std::max(min, std::min(max, val));
+inline double angleDiff(double a, double b) { return wrapAngle(a - b); }
+inline double clamp(double v, double lo, double hi) {
+  return std::max(lo, std::min(hi, v));
 }
 
 } // namespace uwb_path

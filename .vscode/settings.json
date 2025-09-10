@@ -70,6 +70,7 @@
         "unordered_map": "cpp",
         "variant": "cpp",
         "xhash": "cpp",
-        "xtree": "cpp"
+        "xtree": "cpp",
+        "csignal": "cpp"
     }
 }
