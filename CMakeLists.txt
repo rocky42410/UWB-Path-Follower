@@ -45,52 +45,25 @@ link_directories(
   ${UNITREE_SDK_PATH}/build/lib
 )
 
-# Main controller
+# Main controller only
 add_executable(uwb_path_controller
   src/uwb_path_controller.cpp
 )
 
-# Convenience function to enforce link order
-function(link_go2 tgt)
-  # Ensure the linker keeps these even if only transitively referenced
-  target_link_options(${tgt} PRIVATE -Wl,--no-as-needed)
+target_link_libraries(uwb_path_controller
+  unitree_sdk2
+  ddscxx
+  ddsc
+  pthread
+  rt
+  m
+  dl
+)
 
-  # ORDER MATTERS with static libs
-  target_link_libraries(${tgt}
-    unitree_sdk2
-    ddscxx
-    ddsc
-    ddsrt
-    m
-    dl
-    rt
-    Threads::Threads
-  )
-
-  set_target_properties(${tgt} PROPERTIES
-    INSTALL_RPATH "${UNITREE_SDK_PATH}/lib:${UNITREE_SDK_PATH}/lib/aarch64:${UNITREE_SDK_PATH}/lib/x86_64:/usr/local/lib"
-    BUILD_RPATH   "${UNITREE_SDK_PATH}/lib:${UNITREE_SDK_PATH}/lib/aarch64:${UNITREE_SDK_PATH}/lib/x86_64:/usr/local/lib"
-  )
-endfunction()
-
-# Apply to main binary
-link_go2(uwb_path_controller)
-
-# Diagnostic tools (if source files exist)
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/heading_step_response.cpp)
-  add_executable(heading_step_response diagnostics/heading_step_response.cpp)
-  link_go2(heading_step_response)
-endif()
-
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/turn_deadband_scan.cpp)
-  add_executable(turn_deadband_scan diagnostics/turn_deadband_scan.cpp)
-  link_go2(turn_deadband_scan)
-endif()
-
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/uwb_imu_latency_estimator.cpp)
-  add_executable(uwb_imu_latency_estimator diagnostics/uwb_imu_latency_estimator.cpp)
-  link_go2(uwb_imu_latency_estimator)
-endif()
+set_target_properties(uwb_path_controller PROPERTIES
+  INSTALL_RPATH "${UNITREE_SDK_PATH}/lib:${UNITREE_SDK_PATH}/lib/aarch64:${UNITREE_SDK_PATH}/lib/x86_64:/usr/local/lib"
+  BUILD_RPATH   "${UNITREE_SDK_PATH}/lib:${UNITREE_SDK_PATH}/lib/aarch64:${UNITREE_SDK_PATH}/lib/x86_64:/usr/local/lib"
+)
 
 install(TARGETS uwb_path_controller DESTINATION bin)
 

@@ -8,7 +8,7 @@
 #include <unitree/idl/go2/UwbState_.hpp>
 #include <unitree/robot/channel/channel_subscriber.hpp>
 
-#include <mutex>
+#include <mutex>        // <-- Ensure this is included
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -39,7 +39,7 @@ struct has_stamp_sec_nsec : std::false_type {};
 
 template <class T>
 struct has_stamp_sec_nsec<T,
-  std::void_t<
+  std::void_t
     decltype(std::declval<T&>().stamp().sec()),
     decltype(std::declval<T&>().stamp().nsec())
   >
@@ -71,7 +71,7 @@ private:
   using TimePoint = Clock::time_point;
 
   ChannelSubscriberPtr uwb_subscriber;
-  std::mutex data_mutex;
+  mutable std::mutex data_mutex;  // <-- Make mutex mutable for const methods
   std::atomic<bool> data_available{false};
 
   UWBMeasurement latest_measurement{};
