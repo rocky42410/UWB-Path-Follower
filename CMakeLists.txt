@@ -63,3 +63,13 @@ set_target_properties(uwb_path_controller PROPERTIES
 )
 
 install(TARGETS uwb_path_controller DESTINATION bin)
+
+# Diagnostics
+add_executable(heading_step_response diagnostics/heading_step_response.cpp)
+target_link_libraries(heading_step_response unitree_sdk2)
+
+add_executable(turn_deadband_scan diagnostics/turn_deadband_scan.cpp)
+target_link_libraries(turn_deadband_scan unitree_sdk2)
+
+add_executable(uwb_imu_latency_estimator diagnostics/uwb_imu_latency_estimator.cpp)
+target_link_libraries(uwb_imu_latency_estimator unitree_sdk2)
