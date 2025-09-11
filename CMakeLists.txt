@@ -12,6 +12,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
+# Make sure we prefer real pthread flags
+set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 # Unitree SDK detection
@@ -48,43 +50,54 @@ add_executable(uwb_path_controller
   src/uwb_path_controller.cpp
 )
 
-target_link_libraries(uwb_path_controller
-  unitree_sdk2
-  ddsc
-  ddscxx
-  Threads::Threads
-  rt
-  m
-  dl
-)
+# Convenience function to enforce link order
+function(link_go2 tgt)
+  # Ensure the linker keeps these even if only transitively referenced
+  target_link_options(${tgt} PRIVATE -Wl,--no-as-needed)
 
-set_target_properties(uwb_path_controller PROPERTIES
-  INSTALL_RPATH "${UNITREE_SDK_PATH}/lib:/usr/local/lib"
-  BUILD_RPATH "${UNITREE_SDK_PATH}/lib:/usr/local/lib"
-)
+  # ORDER MATTERS with static libs
+  target_link_libraries(${tgt}
+    unitree_sdk2
+    ddscxx
+    ddsc
+    ddsrt
+    m
+    dl
+    rt
+    Threads::Threads
+  )
 
-# Optional: Build diagnostics separately with their own Makefile
-option(BUILD_DIAGNOSTICS "Build diagnostic tools" OFF)
-if(BUILD_DIAGNOSTICS)
+  set_target_properties(${tgt} PROPERTIES
+    INSTALL_RPATH "${UNITREE_SDK_PATH}/lib:${UNITREE_SDK_PATH}/lib/aarch64:${UNITREE_SDK_PATH}/lib/x86_64:/usr/local/lib"
+    BUILD_RPATH   "${UNITREE_SDK_PATH}/lib:${UNITREE_SDK_PATH}/lib/aarch64:${UNITREE_SDK_PATH}/lib/x86_64:/usr/local/lib"
+  )
+endfunction()
+
+# Apply to main binary
+link_go2(uwb_path_controller)
+
+# Diagnostic tools (if source files exist)
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/heading_step_response.cpp)
   add_executable(heading_step_response diagnostics/heading_step_response.cpp)
+  link_go2(heading_step_response)
+endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/turn_deadband_scan.cpp)
   add_executable(turn_deadband_scan diagnostics/turn_deadband_scan.cpp)
+  link_go2(turn_deadband_scan)
+endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/uwb_imu_latency_estimator.cpp)
   add_executable(uwb_imu_latency_estimator diagnostics/uwb_imu_latency_estimator.cpp)
-  
-  foreach(diag_target heading_step_response turn_deadband_scan uwb_imu_latency_estimator)
-    target_link_libraries(${diag_target}
-      unitree_sdk2
-      ddsc
-      ddscxx
-      Threads::Threads
-      rt
-      m
-      dl
-    )
-    set_target_properties(${diag_target} PROPERTIES
-      INSTALL_RPATH "${UNITREE_SDK_PATH}/lib:/usr/local/lib"
-      BUILD_RPATH "${UNITREE_SDK_PATH}/lib:/usr/local/lib"
-    )
-  endforeach()
+  link_go2(uwb_imu_latency_estimator)
 endif()
 
 install(TARGETS uwb_path_controller DESTINATION bin)
+
+# Print summary
+message(STATUS "")
+message(STATUS "Configuration Summary:")
+message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "  Unitree SDK: ${UNITREE_SDK_PATH}")
+message(STATUS "")

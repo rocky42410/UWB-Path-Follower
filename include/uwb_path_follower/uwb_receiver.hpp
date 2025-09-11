@@ -1,6 +1,9 @@
 // File: include/uwb_path_follower/uwb_receiver.hpp
 #pragma once
 #include "types.hpp"
+#include "ts_ring_buffer.hpp"
+#include "math2d.hpp"
+#include "config.hpp"
 
 #include <unitree/idl/go2/UwbState_.hpp>
 #include <unitree/robot/channel/channel_subscriber.hpp>
@@ -64,6 +67,8 @@ private:
   using UwbState = unitree_go::msg::dds_::UwbState_;
   using ChannelSubscriberT = unitree::robot::ChannelSubscriber<UwbState>;
   using ChannelSubscriberPtr = std::shared_ptr<ChannelSubscriberT>;
+  using Clock = std::chrono::steady_clock;
+  using TimePoint = Clock::time_point;
 
   ChannelSubscriberPtr uwb_subscriber;
   std::mutex data_mutex;
@@ -85,11 +90,17 @@ private:
   uint8_t joy_mode=0, error_state=0;
   bool enabled_from_app=false;
 
-  // system_clock for epoch-based latency
-  std::chrono::system_clock::time_point last_update_time{};
+  // Time-stamped position buffer for interpolation
+  TsRingBuffer<Vec2> pos_buf_{std::chrono::milliseconds(2000)};
+  TimePoint last_rx_{};
+  std::atomic<bool> have_clock_offset_{false};
+  std::chrono::steady_clock::duration clock_offset_{};
+  
+  // Keep track of last converted position for immediate access
+  Vec2 last_uwb_world_pos_{};
 
 public:
-  UWBReceiver(double rg, double bg, double ag, double gg)
+  UWBReceiver(double rg = 1.0, double bg = 0.5, double ag = 0.3, double gg = 0.5)
   : r_gate(rg), beta_gate(bg), alpha_gate(ag), gamma_gate(gg) {
     uwb_subscriber = std::make_shared<ChannelSubscriberT>("rt/uwbstate");
     uwb_subscriber->InitChannel([this](const void* message){
@@ -109,7 +120,7 @@ public:
     nm.alpha = msg.pitch_est();
     nm.gamma = msg.yaw_est();
 
-    auto now = std::chrono::system_clock::now();
+    auto now = Clock::now();
     double now_sec = std::chrono::duration<double>(now.time_since_epoch()).count();
     double ts = detail::extract_timestamp_seconds(msg);
     nm.timestamp = std::isfinite(ts) ? ts : now_sec;
@@ -149,7 +160,20 @@ public:
       prev_measurement = nm;
       has_prev = true;
       data_available = true;
-      last_update_time = now;
+      last_rx_ = now;
+      
+      // Convert UWB spherical to world position and add to buffer
+      // This is a simplified conversion - you may need to adjust based on your coordinate system
+      double rho = nm.r * std::cos(nm.alpha); // ground range
+      double x_base = rho * std::cos(nm.beta);
+      double y_base = rho * std::sin(nm.beta);
+      
+      // Transform to world (assuming base station at origin for now)
+      // In real implementation, use base_station config from Config
+      last_uwb_world_pos_ = Vec2{x_base, y_base};
+      
+      // Push to time-stamped buffer
+      onUwbFrame(last_uwb_world_pos_.x, last_uwb_world_pos_.y, now, now);
     }
 
     // extra state
@@ -168,14 +192,37 @@ public:
     enabled_from_app = (msg.enabled_from_app() == 1);
   }
 
+  // Add timestamped position to ring buffer
+  void onUwbFrame(double x, double y,
+                  TimePoint rx_mono_time,
+                  TimePoint uwb_time_if_known) {
+    // If UWB time is known and stable, estimate clock offset once (or run a slow EMA)
+    if (!have_clock_offset_ && uwb_time_if_known != rx_mono_time) {
+      clock_offset_ = rx_mono_time - uwb_time_if_known;
+      have_clock_offset_ = true;
+    }
+    auto t_mono = have_clock_offset_ ? (uwb_time_if_known + clock_offset_) : rx_mono_time;
+    pos_buf_.push(t_mono, Vec2{x, y});
+  }
+
+  // Interpolated position at requested time
+  std::optional<Vec2> positionAt(TimePoint t) const {
+    return pos_buf_.get(t);
+  }
+
   bool getLatestMeasurement(UWBMeasurement& m, double max_age_seconds = 0.5) {
     std::lock_guard<std::mutex> lock(data_mutex);
     if (!data_available) return false;
-    auto now = std::chrono::system_clock::now();
-    double age = std::chrono::duration<double>(now - last_update_time).count();
+    auto now = Clock::now();
+    double age = std::chrono::duration<double>(now - last_rx_).count();
     if (age > max_age_seconds) return false;
     m = latest_measurement;
     return true;
+  }
+
+  Vec2 getLastWorldPosition() const {
+    std::lock_guard<std::mutex> lock(data_mutex);
+    return last_uwb_world_pos_;
   }
 
   void updateSphericalGates(const Config& cfg) {
@@ -231,6 +278,7 @@ public:
     has_prev = false;
     latest_measurement = UWBMeasurement{};
     prev_measurement = UWBMeasurement{};
+    pos_buf_.clear();
     if (uwb_subscriber) uwb_subscriber.reset();
   }
 };

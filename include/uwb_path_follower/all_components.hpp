@@ -6,10 +6,12 @@
 #include <iomanip>
 #include <array>
 #include <string>
+#include <chrono>
+#include <iostream>
 
 #include "uwb_path_follower/types.hpp"
 #include "uwb_path_follower/config.hpp"
-#include "uwb_path_follower/uwb_receiver.hpp"
+#include "uwb_path_follower/math2d.hpp"
 
 namespace uwb_path {
 
@@ -81,6 +83,7 @@ class StateEstimator {
            std::fabs(e.y) < cfg.MAX_POS_INNOV &&
            std::fabs(e.yaw) < cfg.MAX_YAW_INNOV;
   }
+  
   Pose2D rateLimit(const Pose2D& e, double dt) const {
     const double mp = cfg.MAX_POS_RATE * dt;
     const double my = cfg.MAX_YAW_RATE * dt;
@@ -105,8 +108,10 @@ public:
                                                   double dt) {
     Pose2D innov{ meas.x - pred.x, meas.y - pred.y, angleDiff(meas.yaw, pred.yaw) };
     if (!gate(innov)) return {pred,false,false};
+    
     Pose2D bounded = rateLimit(innov, dt);
     bool clipped = (bounded.x!=innov.x || bounded.y!=innov.y || bounded.yaw!=innov.yaw);
+    
     Pose2D fused{
       pred.x + cfg.K_POS * bounded.x,
       pred.y + cfg.K_POS * bounded.y,
@@ -115,7 +120,9 @@ public:
     return {fused,true,clipped};
   }
 
-  void applyZUPT(double gyro_z) { yaw_bias += cfg.ZUPT_BIAS_GAIN * (gyro_z - yaw_bias); }
+  void applyZUPT(double gyro_z) { 
+    yaw_bias += cfg.ZUPT_BIAS_GAIN * (gyro_z - yaw_bias); 
+  }
 
   void setState(const Pose2D& p){ state = p; }
   Pose2D getState() const { return state; }
@@ -149,7 +156,7 @@ public:
 
     const double vy = -cfg.KP_CROSS * cross;
     const double wz =  cfg.KP_HEADING * heading_err;
-    return {cfg.V_NOMINAL, vy, wz};
+    return {cfg.V_NOM, vy, wz};
   }
 
   bool reached(const Pose2D& pose, const Pose2D& wp) const {
@@ -170,19 +177,29 @@ public:
     phase_timer += dt;
     switch (current_phase) {
       case FWD:
-        if (reached(pose, {cfg.PATH_LENGTH,0,0})) { current_phase=SIT1; phase_timer=0; waypoint_start=pose; }
+        if (reached(pose, {cfg.PATH_LENGTH,0,0})) { 
+          current_phase=SIT1; phase_timer=0; waypoint_start=pose; 
+        }
         break;
       case SIT1:
-        if (phase_timer > 2.0) { current_phase=TURN; phase_timer=0; }
+        if (phase_timer > 2.0) { 
+          current_phase=TURN; phase_timer=0; 
+        }
         break;
       case TURN:
-        if (phase_timer > 3.0) { current_phase=BACK; phase_timer=0; }
+        if (phase_timer > 3.0) { 
+          current_phase=BACK; phase_timer=0; 
+        }
         break;
       case BACK:
-        if (reached(pose, {0,0,0})) { current_phase=SIT2; phase_timer=0; waypoint_start=pose; }
+        if (reached(pose, {0,0,0})) { 
+          current_phase=SIT2; phase_timer=0; waypoint_start=pose; 
+        }
         break;
       case SIT2:
-        if (phase_timer > 2.0) { current_phase=FWD; phase_timer=0; }
+        if (phase_timer > 2.0) { 
+          current_phase=FWD; phase_timer=0; 
+        }
         break;
     }
   }
@@ -194,11 +211,13 @@ class LowPassFilter {
   double tau;
 public:
   explicit LowPassFilter(double time_constant): tau(time_constant) {}
+  
   double update(double input, double dt) {
     const double alpha = 1.0 - std::exp(-dt / tau);
     value = alpha*input + (1 - alpha)*value;
     return value;
   }
+  
   double get() const { return value; }
   void reset() { value = 0; }
 };
@@ -256,7 +275,9 @@ public:
     if (++line_count % 100 == 0) log_file.flush();
   }
 
-  ~DataLogger() { if (log_file.is_open()) log_file.close(); }
+  ~DataLogger() { 
+    if (log_file.is_open()) log_file.close(); 
+  }
 };
 
 } // namespace uwb_path

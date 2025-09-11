@@ -27,12 +27,6 @@ struct Config {
   double UWB_ALPHA_GATE = 0.3;
   double UWB_GAMMA_GATE = 0.5;
 
-  // Control
-  double V_NOMINAL = 0.3;
-  double KP_CROSS = 1.0;
-  double KP_HEADING = 0.8;
-  double LP_TAU = 0.25;
-
   // Path
   double PATH_LENGTH = 5.0;
   double WP_TOLERANCE = 0.2;
@@ -47,55 +41,118 @@ struct Config {
   double ZUPT_GYRO_THRESH = 0.05;  // rad/s
   double ZUPT_BIAS_GAIN = 0.02;
 
+  // NEW: Controller parameters
+  double ENTER_TOL_DEG = 15.0;    // degrees to unlock from TURN to FWD
+  double EXIT_TOL_DEG = 25.0;     // degrees to relock from FWD to TURN
+  double W_MIN = 0.65;             // rad/s minimum turn rate
+  double W_MAX = 1.20;             // rad/s maximum turn rate
+  double V_MIN = 0.20;             // m/s minimum forward speed
+  double V_NOM = 0.35;             // m/s nominal forward speed
+  double K_TURN = 1.0;             // turn gain (omega = k*sin(err))
+  double ERR_ALPHA = 0.25;         // heading error low-pass filter
+  double LP_TAU = 0.25;            // command low-pass time constant
+
+  // NEW: Heading fusion parameters
+  double K_UWB = 0.12;             // complementary gain for UWB displacement heading
+  double DISP_WINDOW_SEC = 0.6;   // time window for displacement calculation
+  double DISP_MIN_M = 0.05;       // minimum displacement to trust UWB heading
+
+  // NEW: Control behavior
+  double KP_CROSS = 1.0;
+  double KP_HEADING = 0.8;
+  double STALL_CHECK_TIME = 2.0;  // seconds before probe move
+  double PROBE_DISTANCE = 0.25;   // meters to move forward in probe
+  double PROBE_SPEED = 0.25;      // m/s during probe move
+
   bool loadFromFile(const std::string& filename) {
     std::ifstream f(filename);
     if (!f.is_open()) {
       std::cerr << "[Config] File not found: " << filename << ", using defaults\n";
       return false;
     }
+    
     std::string line;
     while (std::getline(f, line)) {
-      if (line.empty() || line[0]=='#' || line[0]==';') continue;
+      if (line.empty() || line[0]=='#' || line[0]==';' || line[0]=='[') continue;
+      
       auto eq = line.find('=');
       if (eq == std::string::npos) continue;
+      
       std::string key = line.substr(0, eq);
       std::string val = line.substr(eq+1);
+      
       auto trim = [](std::string& s) {
         s.erase(0, s.find_first_not_of(" \t"));
         s.erase(s.find_last_not_of(" \t")+1);
       };
       trim(key); trim(val);
+      
       try {
+        // Base station
         if (key=="base_x") base_station.x = std::stod(val);
         else if (key=="base_y") base_station.y = std::stod(val);
         else if (key=="base_z") base_station.z = std::stod(val);
         else if (key=="base_yaw") base_station.yaw = std::stod(val);
+        
+        // Tag mount
         else if (key=="lever_x") tag_mount.x = std::stod(val);
         else if (key=="lever_y") tag_mount.y = std::stod(val);
         else if (key=="lever_z") tag_mount.z = std::stod(val);
         else if (key=="tag_yaw_offset") tag_mount.yaw_offset = std::stod(val);
+        
+        // Fusion gains
         else if (key=="k_pos") K_POS = std::stod(val);
         else if (key=="k_yaw") K_YAW = std::stod(val);
+        
+        // Innovation gates
         else if (key=="max_pos_innov") MAX_POS_INNOV = std::stod(val);
         else if (key=="max_yaw_innov") MAX_YAW_INNOV = std::stod(val);
         else if (key=="max_pos_rate") MAX_POS_RATE = std::stod(val);
         else if (key=="max_yaw_rate") MAX_YAW_RATE = std::stod(val);
+        
+        // Spherical gates
         else if (key=="uwb_r_gate") UWB_R_GATE = std::stod(val);
         else if (key=="uwb_beta_gate") UWB_BETA_GATE = std::stod(val);
         else if (key=="uwb_alpha_gate") UWB_ALPHA_GATE = std::stod(val);
         else if (key=="uwb_gamma_gate") UWB_GAMMA_GATE = std::stod(val);
-        else if (key=="v_nominal") V_NOMINAL = std::stod(val);
-        else if (key=="kp_cross") KP_CROSS = std::stod(val);
-        else if (key=="kp_heading") KP_HEADING = std::stod(val);
-        else if (key=="lp_tau") LP_TAU = std::stod(val);
+        
+        // Path
         else if (key=="path_length") PATH_LENGTH = std::stod(val);
         else if (key=="wp_tolerance") WP_TOLERANCE = std::stod(val);
+        
+        // UWB
         else if (key=="uwb_min_quality") UWB_MIN_QUALITY = std::stod(val);
         else if (key=="uwb_max_latency") UWB_MAX_LATENCY = std::stod(val);
+        
+        // ZUPT
         else if (key=="zupt_foot_thresh") ZUPT_FOOT_THRESH = std::stod(val);
         else if (key=="zupt_vel_thresh") ZUPT_VEL_THRESH = std::stod(val);
         else if (key=="zupt_gyro_thresh") ZUPT_GYRO_THRESH = std::stod(val);
         else if (key=="zupt_bias_gain") ZUPT_BIAS_GAIN = std::stod(val);
+        
+        // Controller
+        else if (key=="enter_tol_deg") ENTER_TOL_DEG = std::stod(val);
+        else if (key=="exit_tol_deg") EXIT_TOL_DEG = std::stod(val);
+        else if (key=="w_min") W_MIN = std::stod(val);
+        else if (key=="w_max") W_MAX = std::stod(val);
+        else if (key=="v_min") V_MIN = std::stod(val);
+        else if (key=="v_nom") V_NOM = std::stod(val);
+        else if (key=="k_turn") K_TURN = std::stod(val);
+        else if (key=="err_alpha") ERR_ALPHA = std::stod(val);
+        else if (key=="lp_tau") LP_TAU = std::stod(val);
+        
+        // Heading fusion
+        else if (key=="k_uwb") K_UWB = std::stod(val);
+        else if (key=="disp_window_sec") DISP_WINDOW_SEC = std::stod(val);
+        else if (key=="disp_min_m") DISP_MIN_M = std::stod(val);
+        
+        // Control behavior
+        else if (key=="kp_cross") KP_CROSS = std::stod(val);
+        else if (key=="kp_heading") KP_HEADING = std::stod(val);
+        else if (key=="stall_check_time") STALL_CHECK_TIME = std::stod(val);
+        else if (key=="probe_distance") PROBE_DISTANCE = std::stod(val);
+        else if (key=="probe_speed") PROBE_SPEED = std::stod(val);
+        
       } catch (const std::exception& e) {
         std::cerr << "[Config] Error parsing " << key << ": " << e.what() << "\n";
       }
